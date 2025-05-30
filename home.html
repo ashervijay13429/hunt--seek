@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wikipedia</title>
+    <style>
+        .group {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        .log {
+            margin-bottom: 100%;
+            margin-left: 90%;
+            display: inline;
+        }
+        .sea {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #07a321;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin-left: 10px;
+        }
+        .searchInput {
+            width: 400px;
+            height: 50px;
+            margin-left: 60px;
+            font-size: 24px;
+            padding: 10px 15px;
+            border: 2px solid #007BFF;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        ul {
+            list-style: none; /* removes bullets */
+            padding: 0;
+            margin: 0;
+            display: flex; /* aligns items in a row */
+            gap: 20px; /* space between items */
+            margin-top: 15%; 
+            margin-left: 45%;
+        }
+
+        li a {
+            text-decoration: none; /* removes underline */
+            color: black;
+            font-size: 18px;
+        }
+
+        li a:hover {
+            color: blue;
+        }
+        
+        /* Autocomplete styles */
+        .autocomplete {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .autocomplete-items {
+            position: absolute;
+            border: 1px solid #d4d4d4;
+            border-bottom: none;
+            border-top: none;
+            z-index: 99;
+            top: 100%;
+            left: 60px;
+            right: 0;
+            width: 400px;
+        }
+        
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+            background-color: #fff; 
+            border-bottom: 1px solid #d4d4d4; 
+        }
+        
+        .autocomplete-items div:hover {
+            background-color: #e9e9e9; 
+        }
+        
+        h1 {
+            margin-top: 15%; 
+            font-size: 70px;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            h1 {
+                margin-top: 25%;
+                font-size: 50px;
+            }
+            
+            .searchInput {
+                width: 300px;
+                margin-left: 10px;
+            }
+            
+            ul {
+                margin-left: 25%;
+                margin-top: 25%;
+            }
+            
+            .autocomplete-items {
+                left: 10px;
+                width: 300px;
+            }
+            
+            .sea {
+                padding: 10px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                margin-top: 30%;
+                font-size: 40px;
+            }
+            
+            .searchInput {
+                width: 250px;
+                height: 40px;
+                font-size: 18px;
+            }
+            
+            ul {
+                margin-left: 15%;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .sea {
+                padding: 8px 16px;
+                margin-top: 10px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            h1 {
+                margin-top: 40%;
+                font-size: 36px;
+                margin-left: 5%;
+            }
+            
+            .searchInput {
+                width: 220px;
+                height: 36px;
+                font-size: 16px;
+                padding: 6px 10px;
+                margin-left: 5%;
+            }
+            
+            ul {
+                margin-left: 10%;
+                margin-top: 40%;
+            }
+            
+            .autocomplete-items {
+                left: 5%;
+                width: 220px;
+                margin-left: 12%;
+            }
+            
+            .sea {
+                padding: 6px 12px;
+                font-size: 14px;
+            }
+            
+            li a {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <center>
+        <h1>Wikipedia</h1>
+        <div class="autocomplete">
+            <form action="/search" method="get" style="display:inline-block;">
+                <input type="text" id="searchInput" name="name" placeholder="Search" class="searchInput" required autocomplete="off" />
+                <button type="submit" class="sea">Search</button>
+            </form>
+            <div id="autocompleteResults" class="autocomplete-items"></div>
+        </div><br />
+        <ul>
+            <li><a href="/about">About Us</a></li>
+            <li><a href="contact">Contact Us</a></li>
+            <li><a href="/pass">Log In</a></li>
+        </ul>
+    </center>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const autocompleteResults = document.getElementById('autocompleteResults');
+            
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.trim();
+                
+                if (searchTerm.length === 0) {
+                    autocompleteResults.innerHTML = '';
+                    return;
+                }
+                
+                fetch(`/autocomplete?term=${encodeURIComponent(searchTerm)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        autocompleteResults.innerHTML = '';
+                        
+                        if (data.length === 0) {
+                            return;
+                        }
+                        
+                        data.forEach(item => {
+                            const div = document.createElement('div');
+                            div.textContent = item;
+                            div.addEventListener('click', function() {
+                                searchInput.value = item;
+                                autocompleteResults.innerHTML = '';
+                                // Optional: auto-submit the form when clicking a suggestion
+                                document.querySelector('form').submit();
+                            });
+                            autocompleteResults.appendChild(div);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching autocomplete data:', error);
+                    });
+            });
+            
+            // Hide autocomplete when clicking outside
+            document.addEventListener('click', function(event) {
+                if (event.target !== searchInput) {
+                    autocompleteResults.innerHTML = '';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
