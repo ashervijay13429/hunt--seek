@@ -9,10 +9,10 @@ const port = 3005;
 
 // MySQL database configuration
 const database = mysql.createConnection({
-    host: "localhost",
-    user: "Wikipedia",
-    password: "AATCserver123",
-    database: "wikipedia"
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
 });
 
 // Connect to the database
