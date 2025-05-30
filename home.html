@@ -1,326 +1,254 @@
-const express = require('express');
-const path = require('path');
-const app = express();
-const mysql = require('mysql2');
-const multer = require('multer');
-const fs = require('fs');
-
-const port = 3005;
-
-
-// MySQL database configuration
-const database = mysql.createConnection({
-    host: "localhost",
-    user: "Wikipedia",
-    password: "AATCserver123",
-    database: "wikipedia"
-});
-
-// Connect to the database
-database.connect((error) => {
-    if (error) {
-        return console.error("Database connection error:", error);
-    }
-    console.log("Database connected successfully");
-});
-
-// Use multer to handle file uploads and store them temporarily
-const upload = multer({ dest: 'uploads/' });
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json()); // Add this to handle JSON requests
-
-// Add CORS middleware if needed (for development)
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    next();
-});
-
-// POST /login - handles form submission and file upload
-app.post('/login', upload.single('photo'), (req, res) => {
-    try {
-        const photo = req.file;
-        if (!photo) {
-            return res.status(400).send("No photo uploaded");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Find You</title>
+    <style>
+        .group {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        .log {
+            margin-bottom: 100%;
+            margin-left: 90%;
+            display: inline;
+        }
+        .sea {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #07a321;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            margin-left: 10px;
+        }
+        .searchInput {
+            width: 400px;
+            height: 50px;
+            margin-left: 60px;
+            font-size: 24px;
+            padding: 10px 15px;
+            border: 2px solid #007BFF;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        ul {
+            list-style: none; /* removes bullets */
+            padding: 0;
+            margin: 0;
+            display: flex; /* aligns items in a row */
+            gap: 20px; /* space between items */
+            margin-top: 15%; 
+            margin-left: 45%;
         }
 
-        const photoPath = photo.path;
+        li a {
+            text-decoration: none; /* removes underline */
+            color: black;
+            font-size: 18px;
+        }
 
-        const { name, DOB, description, number, email, tag_name, cla } = req.body;
-        const mime_type = photo.mimetype;
-        const photoData = fs.readFileSync(photoPath);
+        li a:hover {
+            color: blue;
+        }
+        
+        /* Autocomplete styles */
+        .autocomplete {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .autocomplete-items {
+            position: absolute;
+            border: 1px solid #d4d4d4;
+            border-bottom: none;
+            border-top: none;
+            z-index: 99;
+            top: 100%;
+            left: 60px;
+            right: 0;
+            width: 400px;
+        }
+        
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+            background-color: #fff; 
+            border-bottom: 1px solid #d4d4d4; 
+        }
+        
+        .autocomplete-items div:hover {
+            background-color: #e9e9e9; 
+        }
+        
+        h1 {
+            margin-top: 15%; 
+            font-size: 70px;
+        }
 
-        const sql = `INSERT INTO rose(name, DOB, description, number, email, tag_name, cla, photo, mime_type) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-        const values = [name, DOB, description, number, email, tag_name, cla, photoData, mime_type];
-
-        database.query(sql, values, (err, results) => {
-            if (err) {
-                console.error('Insert error:', err);
-                return res.status(500).send("Registration unsuccessful");
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            h1 {
+                margin-top: 25%;
+                font-size: 50px;
             }
-            console.log('Insert successful:', results);
-            res.send("Registration successful");
-        });
-
-    } catch (err) {
-        console.error("Upload error:", err);
-        res.status(500).send("Request failed");
-    }
-});
-
-// GET / - serve home page
-app.get('/', (req, res) => {
-    const filePath = path.join(__dirname, 'home.html');
-    res.sendFile(filePath, (err) => {
-        if (err) {
-            console.error("Failed to send home.html:", err);
-            res.status(500).send("Could not load home page");
-        }
-    });
-});
-
-// New endpoint for autocomplete suggestions
-app.get('/autocomplete', (req, res) => {
-    const { term } = req.query;
-    if (!term) {
-        return res.json([]);
-    }
-
-    const SQL_QUERY = "SELECT name FROM rose WHERE name LIKE ? LIMIT 10";
-    database.query(SQL_QUERY, [`%${term}%`], (err, results) => {
-        if (err) {
-            console.error(err);
-            return res.json([]);
-        }
-        res.json(results.map(item => item.name));
-    });
-});
-
-app.get('/pass', (req, res) => {
-    const filePath = path.join(__dirname, 'pass.html');
-    res.sendFile(filePath);
-});
-
-// GET /login - serve login page
-app.get('/login', (req, res) => {
-    const { password } = req.query;
-    if (password !== "AATCserver123") {
-        return res.status(403).send("Access denied");
-    }
-    const filePath = path.join(__dirname, 'login.html');
-    res.sendFile(filePath, (err) => {
-        if (err) {
-            console.error("Failed to send login.html:", err);
-            res.status(500).send("Could not load login page");
-        }
-    });
-});
-
-app.get('/about', (req, res) => {
-    const filePath = path.join(__dirname, 'about.html');
-    res.sendFile(filePath);
-});
-
-app.get('/contact', (req, res) => {
-    const filePath = path.join(__dirname, 'contact.html');
-    res.sendFile(filePath);
-});
-
-// GET /search - search for user by name (now supports partial matches)
-app.get('/search', (req, res) => {
-    const { name } = req.query;
-    console.log("Searching for:", name);
-
-    const SQL_QUERY = "SELECT * FROM rose WHERE name LIKE ?";
-    database.query(SQL_QUERY, [`%${name}%`], (err, results) => {
-        if (err) {
-            console.error(err);
-            return res.send("Error occurred while searching.");
+            
+            .searchInput {
+                width: 300px;
+                margin-left: 10px;
+            }
+            
+            ul {
+                margin-left: 25%;
+                margin-top: 25%;
+            }
+            
+            .autocomplete-items {
+                left: 10px;
+                width: 300px;
+            }
+            
+            .sea {
+                padding: 10px 20px;
+            }
         }
 
-        if (results.length === 0) {
-            return res.send("<h3>No users found</h3>");
+        @media (max-width: 480px) {
+            h1 {
+                margin-top: 30%;
+                font-size: 40px;
+            }
+            
+            .searchInput {
+                width: 250px;
+                height: 40px;
+                font-size: 18px;
+            }
+            
+            ul {
+                margin-left: 15%;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .sea {
+                padding: 8px 16px;
+                margin-top: 10px;
+            }
         }
 
-        if (results.length === 1) {
-            // If only one result, show the full profile
-            const user = results[0];
-            return res.send(`
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>${user.name}</title>
+        @media (max-width: 360px) {
+            h1 {
+                margin-top: 40%;
+                font-size: 36px;
+                margin-left: 5%;
+            }
+            
+            .searchInput {
+                width: 220px;
+                height: 36px;
+                font-size: 16px;
+                padding: 6px 10px;
+                margin-left: 5%;
+            }
+            
+            ul {
+                margin-left: 10%;
+                margin-top: 40%;
+            }
+            
+            .autocomplete-items {
+                left: 5%;
+                width: 220px;
+                margin-left: 12%;
+            }
+            
+            .sea {
+                padding: 6px 12px;
+                font-size: 14px;
+            }
+            
+            li a {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <center>
+        <h1>Find You</h1>
+        <div class="autocomplete">
+            <form action="/search" method="get" style="display:inline-block;">
+                <input type="text" id="searchInput" name="name" placeholder="Search" class="searchInput" required autocomplete="off" />
+                <button type="submit" class="sea">Search</button>
+            </form>
+            <div id="autocompleteResults" class="autocomplete-items"></div>
+        </div><br />
+        <ul>
+            <li><a href="/about">About Us</a></li>
+            <li><a href="contact">Contact Us</a></li>
+            <li><a href="/pass">Log In</a></li>
+        </ul>
+    </center>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const autocompleteResults = document.getElementById('autocompleteResults');
+            
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.trim();
                 
-                </head>
-                <style>
-                        html, body {
-                            background-color: lightblue;
-                            font-family: Arial, sans-serif;
-                            margin: 0;
-                            padding: 0;
-                            height: 100%;
+                if (searchTerm.length === 0) {
+                    autocompleteResults.innerHTML = '';
+                    return;
+                }
+                
+                fetch(`/autocomplete?term=${encodeURIComponent(searchTerm)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        autocompleteResults.innerHTML = '';
+                        
+                        if (data.length === 0) {
+                            return;
                         }
-
-                        header {
-                            background-color: #007acc;
-                            color: white;
-                            padding: 1em;
-                            text-align: center;
-                            font-family: Georgia, serif;
-                        }
-
-                        main {
-                            padding: 2em;
-                            min-height: 80vh;
-                            position: relative;
-                        }
-
-                        .profile-container {
-                            display: flex;
-                            flex-wrap: wrap;
-                            justify-content: space-between;
-                            max-width: 1200px;
-                            margin: 0 auto;
-                        }
-
-                        .profile-image {
-                            flex: 0 0 300px;
-                            text-align: center;
-                            margin-bottom: 20px;
-                        }
-
-                        .profile-image img {
-                            width: 100%;
-                            max-width: 300px;
-                            height: auto;
-                            border-radius: 8px;
-                            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                        }
-
-                        .profile-info {
-                            flex: 0 0 calc(100% - 320px);
-                        }
-
-                        .profile-table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            background-color: white;
-                            border-radius: 8px;
-                            overflow: hidden;
-                            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                            margin-bottom: 30px;
-                        }
-
-                        .profile-table td {
-                            padding: 12px 15px;
-                            border: 1px solid #ddd;
-                        }
-
-                        .profile-table td:first-child {
-                            font-weight: bold;
-                            width: 30%;
-                            background-color: #f5f5f5;
-                        }
-
-                        .profile-description {
-                            background-color: white;
-                            padding: 20px;
-                            border-radius: 8px;
-                            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                            line-height: 1.6;
-                        }
-
-                        /* Responsive Styles */
-                        @media (max-width: 360px) {
-                            header {
-                                padding: 0.5em;
-                            }
-                            header h1 {
-                                font-size: 20px;
-                            }
-                            .profile-table td {
-                                padding: 6px 8px;
-                                font-size: 12px;
-                            }
-                        }
-                    </style>
-                <body>
-                    <header>
-                        <h1>${user.name}</h1>
-                    </header>
-
-                    <main>
-                        <div class="profile-container">
-                            <div class="profile-image">
-                                <img src="/image?name=${encodeURIComponent(user.name)}" alt="photo of ${user.name}">
-                            </div>
-                            
-                            <div class="profile-info">
-                                <table class="profile-table" cellspacing="0" cellpadding="0">
-                                    <tr>
-                                        <td>Name:</td>
-                                        <td>${user.name}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Class:</td>
-                                        <td>${user.cla}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>DOB:</td>
-                                        <td>${user.DOB}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Tag name:</td>
-                                        <td>${user.tag_name}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Phone:</td>
-                                        <td>${user.number}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>E-mail:</td>
-                                        <td>${user.email}</td>
-                                    </tr> 
-                                </table>
-                                
-                                <div class="profile-description">
-                                    ${user.description.replace(/\n/g, '<br>')}
-                                </div>
-                            </div>
-                        </div>
-                    </main>
-                </body>
-                </html>
-
-        `);
-        };
-
-        html += `</body></html>`;
-        res.send(html);
-    });
-});
-
-// GET /image - retrieve user image by name
-app.get('/image', (req, res) => {
-    const name = req.query.name;
-
-    const SQL = "SELECT photo, mime_type FROM rose WHERE name = ?";
-    database.query(SQL, [name], (err, results) => {
-        if (err || results.length === 0) {
-            return res.status(404).send("Image not found");
-        }
-
-        const image = results[0];
-        res.setHeader("Content-Type", image.mime_type);
-        res.send(image.photo);
-    });
-});
-
-// Start the server
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+                        
+                        data.forEach(item => {
+                            const div = document.createElement('div');
+                            div.textContent = item;
+                            div.addEventListener('click', function() {
+                                searchInput.value = item;
+                                autocompleteResults.innerHTML = '';
+                                // Optional: auto-submit the form when clicking a suggestion
+                                document.querySelector('form').submit();
+                            });
+                            autocompleteResults.appendChild(div);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching autocomplete data:', error);
+                    });
+            });
+            
+            // Hide autocomplete when clicking outside
+            document.addEventListener('click', function(event) {
+                if (event.target !== searchInput) {
+                    autocompleteResults.innerHTML = '';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
