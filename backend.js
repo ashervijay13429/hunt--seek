@@ -1,33 +1,35 @@
 const express = require('express');
 const path = require('path');
 const app = express();
-const mysql = require('mysql2');
 const multer = require('multer');
 const fs = require('fs');
-
+const { Pool } = require('pg');
+require('dotenv').config();
 const port = 3005;
 
-// MySQL database configuration
-const database = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
+// PostgreSQL database configuration
+const pool = new Pool({
+    host: "localhost",
+    user: "postgres",
+    password: "your_postgres_password",
+    database: "wikipedia",
+    port: 5432,
 });
 
-// Connect to the database
-database.connect((error) => {
+// Test database connection
+pool.connect((error, client, release) => {
     if (error) {
         return console.error("Database connection error:", error);
     }
     console.log("Database connected successfully");
+    release();
 });
 
 // Use multer to handle file uploads and store them temporarily
 const upload = multer({ dest: 'uploads/' });
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json()); // Add this to handle JSON requests
+app.use(express.json());
 
 // Add CORS middleware if needed (for development)
 app.use((req, res, next) => {
@@ -36,8 +38,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// POST /login - handles form submission and file upload
-app.post('/login', upload.single('photo'), (req, res) => {
+app.post('/login', upload.single('photo'), async (req, res) => {
     try {
         const photo = req.file;
         if (!photo) {
@@ -51,17 +52,10 @@ app.post('/login', upload.single('photo'), (req, res) => {
         const photoData = fs.readFileSync(photoPath);
 
         const sql = `INSERT INTO rose(name, DOB, description, number, email, tag_name, cla, photo, mime_type) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
         const values = [name, DOB, description, number, email, tag_name, cla, photoData, mime_type];
-
-        database.query(sql, values, (err, results) => {
-            if (err) {
-                console.error('Insert error:', err);
-                return res.status(500).send("Registration unsuccessful");
-            }
-            console.log('Insert successful:', results);
-            res.send("Registration successful");
-        });
+        await pool.query(sql, values);
+        res.send("Registration successful");
 
     } catch (err) {
         console.error("Upload error:", err);
@@ -81,28 +75,22 @@ app.get('/', (req, res) => {
 });
 
 // New endpoint for autocomplete suggestions
-app.get('/autocomplete', (req, res) => {
+app.get('/autocomplete', async (req, res) => {
     const { term } = req.query;
     if (!term) {
         return res.json([]);
     }
 
-    const SQL_QUERY = "SELECT name FROM rose WHERE name LIKE ? LIMIT 10";
-    database.query(SQL_QUERY, [`%${term}%`], (err, results) => {
-        if (err) {
-            console.error(err);
-            return res.json([]);
-        }
-        res.json(results.map(item => item.name));
-    });
+    const SQL_QUERY = "SELECT name FROM rose WHERE name ILIKE $1 LIMIT 10";
+    try {
+        const result = await pool.query(SQL_QUERY, [`%${term}%`]);
+        res.json(result.rows.map(item => item.name));
+    } catch (err) {
+        console.error(err);
+        res.json([]);
+    }
 });
 
-app.get('/pass', (req, res) => {
-    const filePath = path.join(__dirname, 'pass.html');
-    res.sendFile(filePath);
-});
-
-// GET /login - serve login page
 app.get('/login', (req, res) => {
     const { password } = req.query;
     if (password !== "AATCserver123") {
@@ -128,16 +116,14 @@ app.get('/contact', (req, res) => {
 });
 
 // GET /search - search for user by name (now supports partial matches)
-app.get('/search', (req, res) => {
+app.get('/search', async (req, res) => {
     const { name } = req.query;
     console.log("Searching for:", name);
 
-    const SQL_QUERY = "SELECT * FROM rose WHERE name LIKE ?";
-    database.query(SQL_QUERY, [`%${name}%`], (err, results) => {
-        if (err) {
-            console.error(err);
-            return res.send("Error occurred while searching.");
-        }
+    const SQL_QUERY = "SELECT * FROM rose WHERE name ILIKE $1";
+    try {
+        const result = await pool.query(SQL_QUERY, [`%${name}%`]);
+        const results = result.rows;
 
         if (results.length === 0) {
             return res.send("<h3>No users found</h3>");
@@ -153,9 +139,7 @@ app.get('/search', (req, res) => {
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <title>${user.name}</title>
-                
-                </head>
-                <style>
+                    <style>
                         html, body {
                             background-color: lightblue;
                             font-family: Arial, sans-serif;
@@ -247,6 +231,7 @@ app.get('/search', (req, res) => {
                             }
                         }
                     </style>
+                </head>
                 <body>
                     <header>
                         <h1>${user.name}</h1>
@@ -294,29 +279,39 @@ app.get('/search', (req, res) => {
                     </main>
                 </body>
                 </html>
+            `);
+        }
 
-        `);
-        };
-
-        html += `</body></html>`;
+        // If multiple results, show a list
+        let html = "<h3>Multiple users found:</h3><ul>";
+        for (const user of results) {
+            html += `<li><a href="/search?name=${encodeURIComponent(user.name)}">${user.name}</a></li>`;
+        }
+        html += "</ul>";
         res.send(html);
-    });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error searching for users");
+    }
 });
 
 // GET /image - retrieve user image by name
-app.get('/image', (req, res) => {
+app.get('/image', async (req, res) => {
     const name = req.query.name;
 
-    const SQL = "SELECT photo, mime_type FROM rose WHERE name = ?";
-    database.query(SQL, [name], (err, results) => {
-        if (err || results.length === 0) {
+    const SQL = "SELECT photo, mime_type FROM rose WHERE name = $1";
+    try {
+        const result = await pool.query(SQL, [name]);
+        if (result.rows.length === 0) {
             return res.status(404).send("Image not found");
         }
 
-        const image = results[0];
+        const image = result.rows[0];
         res.setHeader("Content-Type", image.mime_type);
         res.send(image.photo);
-    });
+    } catch (err) {
+        res.status(500).send("Error retrieving image");
+    }
 });
 
 // Start the server
